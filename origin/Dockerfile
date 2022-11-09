@@ -9,5 +9,5 @@ FROM alpine:latest
 RUN apk update ;  apk add --no-cache ca-certificates ; update-ca-certificates ; mkdir /app
 WORKDIR /app
 COPY --from=builder /app .
-# CMD /app/go-header-printer
+CMD /app/origin
 EXPOSE 8080
