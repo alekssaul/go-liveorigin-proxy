@@ -36,6 +36,7 @@ func NewProxy(targetHost string) (*httputil.ReverseProxy, error) {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(origin)
+	path := "/*catchall"
 
 	proxy.Director = func(req *http.Request) {
 		req.Header.Add("X-Forwarded-Host", req.Host)
