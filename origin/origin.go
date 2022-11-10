@@ -1,3 +1,5 @@
+// most of the functions here are referred from; https://blog.joshsoftware.com/2021/05/25/simple-and-powerful-reverseproxy-in-go/
+
 package main
 
 import (
@@ -8,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -27,16 +30,25 @@ func main() {
 
 // NewProxy takes target host and creates a reverse proxy
 func NewProxy(targetHost string) (*httputil.ReverseProxy, error) {
-	url, err := url.Parse(targetHost)
+	origin, err := url.Parse(targetHost)
 	if err != nil {
 		return nil, err
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(url)
+	proxy := httputil.NewSingleHostReverseProxy(origin)
 
-	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
+		req.Header.Add("X-Forwarded-Host", req.Host)
+		req.Header.Add("X-Origin-Host", origin.Host)
+		req.URL.Scheme = origin.Scheme
+		req.URL.Host = origin.Host
+
+		wildcardIndex := strings.IndexAny(path, "*")
+		proxyPath := singleJoiningSlash(origin.Path, req.URL.Path[wildcardIndex:])
+		if strings.HasSuffix(proxyPath, "/") && len(proxyPath) > 1 {
+			proxyPath = proxyPath[:len(proxyPath)-1]
+		}
+		req.URL.Path = proxyPath
 	}
 
 	proxy.ModifyResponse = modifyResponse()
@@ -70,4 +82,17 @@ func ProxyRequestHandler(proxy *httputil.ReverseProxy) func(http.ResponseWriter,
 	return func(w http.ResponseWriter, r *http.Request) {
 		proxy.ServeHTTP(w, r)
 	}
+}
+
+// copied from https://golang.org/src/net/http/httputil/reverseproxy.go?s=3330:3391#L98
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	}
+	return a + b
 }
